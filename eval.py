@@ -46,6 +46,15 @@ def main():
     task_name = args.task_name
     k = args.k
 
+    if not args.ckpt_path:
+        model_tag = model_name.split('/')[-1]
+        auto_ckpt_path = f"./ckpt/{task_name}/k0-{task_name}-{model_tag}-task_LoRA_ckpt"
+        if os.path.isdir(auto_ckpt_path):
+            args.ckpt_path = auto_ckpt_path
+            print(f"[Info] Auto ckpt_path: {args.ckpt_path}")
+        else:
+            print(f"[Info] No checkpoint found at auto path: {auto_ckpt_path}. Using base model.")
+
     if not args.golds_json:
         args.golds_json = f"./data/{task_name}/user_top_100_history_label.json"
 

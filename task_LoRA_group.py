@@ -227,10 +227,15 @@ def create_train_model(base_model):
         args.task_name,
         model_name.split('/')[-1],
     )
-    if os.path.exists(default_init_lora_path):
-        model = PeftModel.from_pretrained(base_model, default_init_lora_path, is_trainable=True)
-    else:
-        model = get_peft_model(base_model, peft_config)
+    if not os.path.exists(default_init_lora_path):
+        raise FileNotFoundError(
+            f"Task LoRA checkpoint not found: {default_init_lora_path}. "
+            "Please train task LoRA first."
+        )
+
+    task_lora_model = PeftModel.from_pretrained(base_model, default_init_lora_path, is_trainable=False)
+    base_with_task = task_lora_model.merge_and_unload()
+    model = get_peft_model(base_with_task, peft_config)
     return model, default_init_lora_path
 
 
@@ -251,7 +256,7 @@ training_arguments = transformers.TrainingArguments(
     num_train_epochs=max_epoch,
     save_steps=1e9,
     logging_steps=1,
-    learning_rate=5e-5,
+    learning_rate=1e-5,
     weight_decay=1e-2,
     bf16=True,
     max_grad_norm=0.3,

@@ -88,10 +88,11 @@ def main():
     if not os.path.exists(task_ckpt_path):
         raise FileNotFoundError(f"Task LoRA checkpoint not found: {task_ckpt_path}")
 
-    model = PeftModel.from_pretrained(base_model, task_ckpt_path, adapter_name="task_base")
-    model.set_adapter("task_base")
-    print(f"Loaded task base adapter from: {task_ckpt_path}")
+    task_lora_model = PeftModel.from_pretrained(base_model, task_ckpt_path, is_trainable=False)
+    base_with_task = task_lora_model.merge_and_unload()
+    print(f"Loaded and merged frozen task LoRA from: {task_ckpt_path}")
 
+    model = None
     group_to_adapter = {}
     for group_id in range(args.num_groups):
         ckpt_path = resolve_group_ckpt_path(task_name, model_name, group_id)
@@ -100,11 +101,15 @@ def main():
             continue
 
         adapter_name = f"group_{group_id}"
-        model.load_adapter(ckpt_path, adapter_name=adapter_name)
+        if model is None:
+            model = PeftModel.from_pretrained(base_with_task, ckpt_path, adapter_name=adapter_name, is_trainable=False)
+        else:
+            model.load_adapter(ckpt_path, adapter_name=adapter_name, is_trainable=False)
+
         group_to_adapter[group_id] = adapter_name
         print(f"Loaded group {group_id} adapter from: {ckpt_path}")
 
-    if len(group_to_adapter) == 0:
+    if model is None or len(group_to_adapter) == 0:
         raise FileNotFoundError("No group LoRA checkpoint found. Please check ckpt paths.")
 
     model.eval()

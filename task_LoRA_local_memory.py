@@ -17,7 +17,7 @@ from utils import get_first_k_tokens
 
 parser = argparse.ArgumentParser(description="Train group-wise local memory (user embedding) on profile records")
 parser.add_argument('--model_name', type=str, default='/cfs/models/llama/llama3.1-8B')
-parser.add_argument('--batch_size', type=int, default=12)
+parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--k', type=int, default=0)
 parser.add_argument('--cut_off', type=int, default=2048)
 parser.add_argument('--max_epoch', type=int, default=3)
@@ -30,8 +30,8 @@ parser.add_argument('--group_mapping_file', type=str, default='')
 parser.add_argument('--num_groups', type=int, default=5)
 parser.add_argument('--task_ckpt_path', type=str, default='', help='Optional override for task LoRA ckpt (default: k0 task ckpt)')
 parser.add_argument('--group_mode', type=int, default=0, help='0: use group2 OPPU LoRA, 1: use group task LoRA')
-parser.add_argument('--local_lora_r', type=int, default=8)
-parser.add_argument('--local_lora_alpha', type=int, default=16)
+parser.add_argument('--local_lora_r', type=int, default=4)
+parser.add_argument('--local_lora_alpha', type=int, default=8)
 parser.add_argument('--local_lora_dropout', type=float, default=0.05)
 parser.add_argument('--preprocess_only', action='store_true')
 parser.add_argument('--cache_dir', type=str, default='./cache_local')
@@ -342,8 +342,8 @@ training_arguments = transformers.TrainingArguments(
     num_train_epochs=max_epoch,
     save_steps=1e9,
     logging_steps=10,
-    learning_rate=3e-4,
-    weight_decay=0.0,
+    learning_rate=1e-5,
+    weight_decay=1e-2,
     bf16=True,
     max_grad_norm=0.3,
     warmup_ratio=0.1,
