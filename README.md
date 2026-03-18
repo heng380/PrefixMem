@@ -50,7 +50,7 @@ torchrun --nproc_per_node=8 task_LoRA.py --task_name movie_tagging
 Evaluation:
 
 ```bash
-python eval.py --task_name movie_tagging --ckpt_path ./ckpt/movie_tagging/k0-movie_tagging-llama3.1-8B-task_LoRA_ckpt/ --k 1 --profile
+python eval.py --task_name movie_tagging --k 1 --profile
 ```
 
 #### Stage 2: Group memory
@@ -58,15 +58,15 @@ python eval.py --task_name movie_tagging --ckpt_path ./ckpt/movie_tagging/k0-mov
 Training:
 
 ```bash
-python /home/ubuntu/repos/agent/OPPU/cluster_profiles.py --task_name movie_tagging
+python cluster_profiles.py --task_name movie_tagging
 
-torchrun --nproc_per_node=8 /home/ubuntu/repos/agent/OPPU/task_LoRA_group.py --task_name movie_tagging
+torchrun --nproc_per_node=8 task_LoRA_group.py --task_name movie_tagging
 ```
 
 Evaluation:
 
 ```bash
-python /home/ubuntu/repos/agent/OPPU/eval_group.py --task_name movie_tagging --k 1 --profile
+python eval_group.py --task_name movie_tagging --k 1 --profile
 ```
 
 #### Stage 3: Local memory + mediator
@@ -74,13 +74,13 @@ python /home/ubuntu/repos/agent/OPPU/eval_group.py --task_name movie_tagging --k
 Training:
 
 ```bash
-torchrun --nproc_per_node=8 /home/ubuntu/repos/agent/OPPU/task_LoRA_local_memory.py --task_name movie_tagging --group_mode 1
+torchrun --nproc_per_node=8 task_LoRA_local_memory.py --task_name movie_tagging --group_mode 1
 ```
 
 Evaluation:
 
 ```bash
-python /home/ubuntu/repos/agent/OPPU/eval_local.py --task_name movie_tagging --group_mode 1
+python eval_local.py --task_name movie_tagging --group_mode 1
 ```
 
 ## Citation ##
