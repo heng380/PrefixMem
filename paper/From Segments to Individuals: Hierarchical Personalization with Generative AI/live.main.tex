@@ -1,0 +1,208 @@
+\documentclass[11pt]{article}
+
+\usepackage[preprint]{acl}
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{graphicx}
+
+\setlength{\parskip}{0pt}
+
+\title{From Segments to Individuals: Hierarchical Personalization with Generative AI}
+
+\author{Heng Cao \\
+  Microsoft \\
+  \texttt{hengcao@microsoft.com}}
+
+\begin{document}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Personalization for large language models (LLMs) is increasingly important for user-centric applications. Existing approaches typically follow two paradigms: prompt-based methods that inject user information through retrieval or profile prompts, and model adaptation methods that encode user preferences directly into model parameters. However, prompt-based approaches depend heavily on prompt construction and retrieval pipelines, while model adaptation methods often require maintaining user-specific parameters, limiting scalability. To address these challenges, we propose \textbf{PrefixMem}, a three-layer hierarchical memory framework for scalable LLM personalization. PrefixMem introduces segment-level memory to bridge global and individual preferences, represents user-specific signals through soft prefix adaptation, and employs a shared LoRA-based mediator to align individual memories with shared representations. Experiments across multiple personalization tasks show that PrefixMem significantly improves personalization accuracy while maintaining a lightweight and scalable architecture. Code: \url{https://github.com/heng380/ProMem}
+\end{abstract}
+
+\section{Introduction}
+Large language models (LLMs) have achieved strong performance across a wide range of NLP tasks. However, their outputs are often generic and fail to capture individual user preferences. This limitation has motivated growing research on personalization, which aims to adapt model behavior to users’ specific interests, styles, or goals.
+
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox[c][4.0cm][c]{0.9\columnwidth}{\centering Figure placeholder}}
+  \caption{Placeholder caption.}
+  \label{fig:placeholder}
+\end{figure}
+
+Early work on LLM personalization mainly relies on prompt-based approaches, which inject user preferences into the input context through retrieved histories or profiles. Typical methods employ retrieval-augmented generation (RAG) or profile-augmented prompting (PAG) to incorporate user information at inference time. While these approaches require no model modification, their effectiveness heavily depends on prompt construction and retrieval quality.
+
+More recent studies adopt model adaptation methods that encode user preferences directly into model parameters, often using parameter-efficient fine-tuning (PEFT). For example, One PEFT Per User (OPPU) assigns a dedicated PEFT module to each user~\cite{tan2024democratizing}, while approaches such as PROPER~\cite{zhang2025proper} leverage progressive training with LoRA-based mixture-of-experts to capture personalized signals, Profile-to-PEFT~\cite{tan2025instant} generates personalized LoRA parameters directly from user profiles using a hypernetwork.
+Despite significant progress in LLM personalization, several challenges remain:
+
+\begin{itemize}
+    \setlength{\itemsep}{0pt}
+    \setlength{\topsep}{0pt}
+    \setlength{\parsep}{0pt}
+
+    \item \textbf{Sparse user histories}: User interaction histories are typically sparse, causing population-level models to capture average preferences rather than individual ones. For example, in the movie tagging task of the LaMP dataset, the average user history contains only 12 records, while the top 100 users account for nearly 50\% of all interactions, with an average of 56 records per user. Such highly active users dominate the observed interaction data and disproportionately influence the learned preference patterns, making it difficult for models to represent the preferences of less active users~\cite{salemi2024lamp}.
+
+    \item \textbf{Retrieval sensitivity}: Memory construction based on retrieval methods such as RAG~\cite{mysore-etal-2024-pearl} or PAG~\cite{richardson2023integrating} is highly sensitive to retrieval accuracy and generation quality. Minor noise or changes in retrieval strategy can significantly degrade generation performance and may introduce privacy risks. Moreover, many PEFT-based approaches still rely on RAG/PAG-style prompting to inject user-specific signals, such as LoGo~\cite{wang2025personal}, which can limit robustness and controllability.
+
+    \item \textbf{Limited scalability}: PEFT-based personalization approaches often allocate dedicated parameters (e.g., LoRA modules) for individual users, which increases system complexity and limits scalability to large user populations. Representative methods such as OPPU~\cite{tan2024democratizing}, PROPER~\cite{zhang2025proper}, and Profile-to-PEFT~\cite{tan2025instant} either maintain user-specific parameters or generate them on-the-fly, both of which can incur substantial storage and serving overhead.
+\end{itemize}
+
+To address these challenges, we propose \textbf{PrefixMem}, a hierarchical memory framework for scalable LLM personalization. Instead of directly adapting the model to user-specific preferences after population-level training, PrefixMem introduces an intermediate segment-level memory that captures shared preferences among groups of users. The segment-level memory is constructed by clustering users based on their profile records or interaction patterns, allowing users with similar behavioral characteristics to share intermediate preference representations. This intermediate layer acts as a bridge between global and individual preferences, enabling users with sparse interaction histories to benefit from shared segment-level knowledge. After learning population-level and segment-level memories, these shared components remain fixed, while user-specific preferences are modeled through lightweight soft-prefix adaptation. The learned prefix effectively summarizes user profiles and serves as a compact user state, avoiding the need for explicit RAG/PAG-style prompt construction. Finally, a shared LoRA-based mediator is introduced to align individual user memories with shared representations, enabling efficient and scalable personalization across large user populations. Experiments on the LaMP benchmark show PrefixMem progressively enhances the personalization performance of LLMs, significantly outperforming strong baselines while maintaining a lightweight and scalable architecture.
+
+In summary, our contributions are as follows:
+\begin{itemize}
+    \setlength{\itemsep}{0pt}
+    \setlength{\topsep}{0pt}
+    \setlength{\parsep}{0pt}
+    \item \textbf{New framework}: We propose one hierarchical memory framework for scalable LLM personalization with three-stage progressive learning.
+    \item \textbf{Segment-level memory adaptation}: We introduce an intermediate segment-level memory that bridges global and individual preferences, enabling shared adaptation across similar users.
+    \item \textbf{Scalable personalization}: We design a lightweight soft-prefix adaptation with a shared LoRA-based mediator to achieve efficient personalization at scale.
+\end{itemize}
+\section{Method}
+
+\begin{figure*}[t]
+    \centering
+    \fbox{\parbox[c][4.0cm][c]{0.9\textwidth}{\centering Figure placeholder}}
+    \caption{Placeholder for figure 2.}
+    \label{fig:method}
+\end{figure*}
+
+\paragraph{Task formulation}
+Following prior work~\cite{tan2024democratizing}, we consider a personalized text generation setting with a set of users $\mathcal{U}$. Each user $u \in \mathcal{U}$ is associated with an interaction history $\mathcal{H}_u$. Given a query $x$ (e.g., a movie tagging task, product rating task, or news headline generation task), the model aims to generate a response $y$ that aligns with the user's preferences. Formally, the objective is to learn a conditional generator that maximizes the likelihood $p_\theta(y \mid x, u, \mathcal{H}_u)$ while remaining scalable and computationally efficient across a large number of users.
+
+\paragraph{Overall framework}
+As illustrated in Figure~2, PrefixMem decomposes personalization into a three-stage memory pipeline:
+
+\begin{itemize}
+    \setlength{\itemsep}{0pt}
+    \setlength{\topsep}{0pt}
+    \setlength{\parsep}{0pt}
+
+    \item \textbf{Population-level adaptation}. 
+    The model first learns population-level knowledge for task instruction following and shared preference patterns using LoRA.
+
+    \item \textbf{Segment-level adaptation}. 
+    The population-level LoRA is kept fixed while users with similar interaction patterns are clustered into segments. A dedicated LoRA is then trained for each segment to capture intermediate preference representations, bridging global and individual preferences and improving robustness under sparse user histories.
+
+    \item \textbf{User-level adaptation}. 
+    After fixing the population-level and segment-level LoRAs, a lightweight soft prefix is trained for each user to summarize individual preferences. A shared LoRA-based mediator is further introduced to align user-specific memories with shared representations.
+\end{itemize}
+
+At inference time, the model conditions on the task LoRA, the segment LoRA, and the user prefix, together with the mediator LoRA, to generate personalized outputs.
+
+\subsection{Population-level Adaptation}
+
+In the first stage, PrefixMem learns shared task-level knowledge from the entire training population. We apply Low-Rank Adaptation (LoRA)~\cite{hu2022lora} to the base LLM and fine-tune it using the aggregated query--response pairs $\{(q_i, r_i)\}$ collected from all users in the training set. The training objective follows the standard autoregressive language modeling loss:
+
+\begin{equation}
+    \mathcal{L}_{\text{pop}} = -\sum_{i} \log p_{\theta + \Delta\theta_{\text{pop}}}(r_i \mid q_i),
+\end{equation}
+where $\Delta\theta_{\text{pop}}$ denotes the low-rank parameter updates introduced by LoRA. Specifically, for each target weight matrix $W \in \mathbb{R}^{d \times k}$ in the transformer, LoRA parameterizes the update as $\Delta W = BA$, where $B \in \mathbb{R}^{d \times r}$ and $A \in \mathbb{R}^{r \times k}$ with rank $r \ll \min(d, k)$. During this stage, the pretrained backbone parameters remain frozen and only the LoRA parameters are optimized.
+
+The resulting population-level LoRA captures general task-specific instruction-following capability and broadly shared preference patterns across the user population. This shared adaptation serves as a common foundation for the subsequent segment-level and user-level adaptation stages. After convergence, the learned population-level parameters $\Delta\theta_{\text{pop}}$ are fixed and carried forward to the next stage.
+
+\subsection{Segment-level adaptation}
+In the second stage, PrefixMem introduces an intermediate segment-level memory to bridge population-level and user-level preferences. The key insight is that users with similar profiles often share latent preference patterns, and grouping them into segments can provide stronger supervision signals than sparse individual histories alone.
+
+\paragraph{User clustering.}
+To construct segments, we first encode each user's profile text into a dense representation using a pretrained embedding model. Specifically, given a user profile $p_u$, we obtain its embedding $\mathbf{e}_u = \text{Enc}(p_u) \in \mathbb{R}^{d_e}$ via mean pooling over the last hidden states of the encoder, followed by $\ell_2$ normalization. We then apply $K$-Means clustering on the normalized embeddings $\{\mathbf{e}_u\}_{u \in \mathcal{U}}$ to partition users into $K$ segments $\{S_1, S_2, \dots, S_K\}$, where each segment $S_k$ contains users with similar profile characteristics.
+\paragraph{Segment-level LoRA Training.}
+After obtaining the segment assignments, the population-level LoRA parameters $\Delta\theta_{\text{pop}}$ are frozen, and a dedicated segment-level LoRA $\Delta\theta_{\text{seg}}^{(k)}$ is trained for each segment $S_k$. The training data for segment $k$ consists of all query--response pairs associated with users assigned to that segment: $\mathcal{D}_k = \{(q_i, r_i) \mid u_i \in S_k\}$. The segment-level training objective is defined as
+
+\begin{equation}
+    \mathcal{L}_{\text{seg}}^{(k)} = -\sum_{(q_i, r_i) \in \mathcal{D}_k} \log p_{\theta + \Delta\theta_{\text{pop}} + \Delta\theta_{\text{seg}}^{(k)}}(r_i \mid q_i).
+\end{equation}
+
+By stacking the segment-level LoRA on top of the frozen population-level LoRA, each segment adapter learns to model group-specific preference deviations from the shared population baseline. This hierarchical adaptation enables users with sparse interaction histories to benefit from the aggregated behavioral patterns of similar users within the same segment. After training, the segment-level parameters $\{\Delta\theta_{\text{seg}}^{(k)}\}_{k=1}^{K}$ are fixed and used in the subsequent user-level adaptation stage.
+
+\subsection{User-level Adaptation}
+
+In the third stage, the population-level LoRA $\Delta\theta_{\text{pop}}$ and the segment-level LoRA $\Delta\theta_{\text{seg}}^{(k)}$ are merged into the backbone model and kept frozen. On top of this shared backbone, PrefixMem learns compact user-specific representations via soft-prefix adaptation, together with a shared LoRA-based mediator that aligns individual memories with the shared model representations.
+
+\paragraph{User Prefix Embedding.}
+For each segment $S_k$, we maintain a learnable user embedding table $\mathbf{E}^{(k)} \in \mathbb{R}^{|S_k| \times (d \cdot L)}$, where $d$ denotes the hidden dimension of the LLM and $L$ is the prefix length. Given a user $u$ with index $j$ in the embedding table, the corresponding user prefix is obtained by reshaping the embedding vector:
+\[
+\mathbf{P}_u = \text{Reshape}(\mathbf{E}^{(k)}_j) \in \mathbb{R}^{L \times d}.
+\]
+The prefix $\mathbf{P}_u$ is prepended to the token embeddings of the input query $q$, forming the augmented input representation $[\mathbf{P}_u; \mathbf{H}_q]$, where $\mathbf{H}_q$ denotes the token embeddings of $q$. The attention mask and label sequences are extended accordingly, while the prefix positions are excluded from the loss computation.
+
+\paragraph{Mediator LoRA.}
+To facilitate effective interaction between user-specific prefix signals and the shared backbone representations, we introduce a lightweight LoRA-based mediator $\Delta\theta_{\text{med}}$ that is shared across all users within the same segment. The mediator LoRA is applied on top of the merged backbone (i.e., after population- and segment-level adaptation) and is jointly optimized together with the user prefix embeddings. By sharing the mediator parameters across users, the model avoids introducing additional per-user model parameters beyond the compact prefix representation, thereby preserving scalability.
+
+\paragraph{Training Objective.}
+Within each segment $S_k$, the user embedding table $\mathbf{E}^{(k)}$ and the mediator LoRA $\Delta\theta_{\text{med}}^{(k)}$ are jointly optimized using the autoregressive language modeling objective:
+\begin{equation}
+    \mathcal{L}_{\text{user}}^{(k)} =
+    -\sum_{u \in S_k}
+    \sum_{(q_i, r_i) \in \mathcal{H}_u}
+    \log
+    p_{\hat{\theta}^{(k)} + \Delta\theta_{\text{med}}^{(k)}}(r_i \mid \mathbf{P}_u, q_i),
+\end{equation}
+where
+\[
+\hat{\theta}^{(k)} = \theta + \Delta\theta_{\text{pop}} + \Delta\theta_{\text{seg}}^{(k)}
+\]
+denotes the backbone parameters after population-level and segment-level adaptation. The learned user prefix $\mathbf{P}_u$ serves as a compact representation of the user's profile and interaction history, effectively replacing explicit RAG/PAG-style prompt construction with a continuous, end-to-end learned representation.
+
+\section{Experimental Setup}
+
+
+
+\begin{table*}[t]
+    \centering
+    \fbox{\parbox[c][3.5cm][c]{0.9\textwidth}{\centering Table placeholder: Dataset statistics}}
+    \caption{Statistics of the LaMP benchmark tasks used in our experiments.}
+    \label{tab:datasets}
+\end{table*}
+
+\paragraph{Datasets.}
+Following prior work~\cite{tan2024democratizing,zhang2025proper}, we conduct experiments on the Large Language Model Personalization (LaMP) benchmark~\cite{salemi2024lamp}. LaMP covers seven public personalization tasks spanning both classification and generation: personalized citation identification (LaMP-1), personalized movie tagging (LaMP-2), personalized product rating (LaMP-3), personalized news headline generation (LaMP-4), personalized scholarly title generation (LaMP-5), and personalized tweet paraphrasing (LaMP-7).\footnote{We exclude LaMP-6 (email subject generation) due to restricted access to private data.} Following OPPU~\cite{tan2024democratizing}, we adopt the same data split: the 100 most active users are selected for user-level adaptation and evaluation, while all remaining users are used for population-level and segment-level adaptation. Dataset statistics are provided in Table~\ref{tab:datasets}.
+
+\paragraph{Baselines.}
+We compare PrefixMem against both non-personalized and personalized baselines. Non-personalized baselines include the base LLM with zero-shot prompting. Personalized baselines cover prompt-based methods, including retrieval-augmented generation (RAG) and profile-augmented generation (PAG)~\cite{salemi2024lamp,richardson2023integrating}. For the backbone LLM, we use Llama-3.1-8B across all methods for fair comparison. BM25 is used as the retriever for all retrieval-based methods. Detailed hyperparameter settings are provided in the appendix.
+
+\paragraph{Evaluation Metrics.}
+Following LaMP~\cite{salemi2024lamp}, we use accuracy and F1-score for classification tasks (LaMP-1, LaMP-2), Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE) for LaMP-3, and ROUGE-1 and ROUGE-L for text generation tasks (LaMP-4, LaMP-5, LaMP-7). Higher values indicate better performance for all metrics, except for MAE and RMSE where lower values are better.
+
+\section{Experimental Results}
+% TODO
+\section{Related Work}
+
+Recent surveys~\cite{liu2025survey} categorize LLM personalization techniques into three major directions: input-level prompting, model-level adaptation, and objective-level alignment.
+
+\paragraph{Prompt-based Personalization.}
+Prompt-based approaches inject user-specific context directly into the LLM input without modifying model parameters. Profile-Augmented Generation (PAG)~\cite{richardson2023integrating} summarizes user histories into natural language profiles and prepends them to the query. Retrieval-Augmented Generation (RAG)~\cite{salemi2024lamp,mysore-etal-2024-pearl} retrieves relevant past interactions to augment the input context. While these methods are lightweight and applicable to black-box models, their effectiveness heavily depends on retrieval accuracy and prompt construction quality. Moreover, they often struggle to capture latent user preferences that cannot be easily verbalized in textual prompts.
+
+\paragraph{Model Adaptation for Personalization.}
+Model adaptation methods encode user preferences directly into model parameters through parameter-efficient fine-tuning (PEFT). Shared PEFT approaches train a single adapter across all users but provide limited individual-level expressiveness. In contrast, per-user PEFT methods such as OPPU~\cite{tan2024democratizing} assign a dedicated LoRA module to each user, achieving stronger personalization at the expense of scalability. To balance personalization capacity and efficiency, several collaborative strategies have been proposed. PROPER~\cite{zhang2025proper} introduces hierarchical user grouping with MoE-LoRA integration to enable staged adaptation from population-level to individual-level preferences. Profile-to-PEFT~\cite{tan2025instant} generates personalized LoRA parameters directly from user profiles via a hypernetwork. Our work is related to this line of research but differs in two key aspects: we represent user preferences using lightweight soft-prefix embeddings instead of maintaining per-user LoRA modules, and we employ a shared mediator LoRA to align personalized signals with the base model, enabling scalable personalization.
+
+\paragraph{Personalized Alignment.}
+Personalized alignment methods adapt model behavior to individual user preferences through multi-objective optimization. Training-time approaches such as MORLHF~\cite{wu2023morlhf} optimize policies using weighted combinations of multiple reward models. Decoding-time approaches such as Personalized Soups~\cite{jang2023personalized} merge independently trained policy models during inference. Although these methods effectively capture preference heterogeneity along predefined dimensions, they typically rely on explicit preference annotations. As a result, they are less suitable for scenarios where user preferences must be inferred from sparse interaction histories, which is the setting considered in our work.
+
+\section{Conclusion}
+
+We presented PrefixMem, a hierarchical memory framework for scalable LLM personalization. By decomposing personalization into population-level, segment-level, and user-level adaptation, PrefixMem progressively captures shared task knowledge, group-level preferences, and individual user signals. To enable efficient personalization, PrefixMem represents user preferences using lightweight soft-prefix embeddings combined with a shared mediator LoRA, eliminating the need for maintaining per-user model parameters. This design provides a scalable alternative to both retrieval-based prompting methods and per-user PEFT approaches. Experimental results on the LaMP benchmark show that PrefixMem achieves strong performance across both classification and generation tasks, outperforming several competitive baselines. In future work, we plan to extend the framework by incorporating temporal modeling of user preferences and exploring its applicability to broader personalization scenarios.
+
+\section*{Limitations}
+
+PrefixMem has several limitations. First, its effectiveness depends on the quality of segment construction. In our implementation, user segments are derived from profile-based embeddings using K-Means clustering. If user profiles are noisy, sparse, or weakly informative, the resulting segment assignments may be suboptimal, potentially reducing the effectiveness of segment-level adaptation.
+
+Second, our framework primarily models relatively stable user preferences and does not explicitly capture rapid temporal shifts in user interests. In highly dynamic environments, fixed segment adapters and static user prefixes may fail to fully reflect users’ current intent.
+
+Third, although PrefixMem is more parameter-efficient than per-user LoRA approaches, the training procedure still involves a three-stage pipeline (population-, segment-, and user-level adaptation), which introduces additional system complexity and hyperparameter tuning overhead.
+
+Finally, our experiments are conducted on the LaMP benchmark with a fixed backbone model and evaluation setup. Further validation is required to assess the generalization of our framework to other domains, larger user populations, and scenarios with stricter privacy or fairness requirements.
+
+\section*{Ethical Impact}
+PrefixMem relies on user-related data for personalization, which introduces potential risks related to privacy, fairness, and transparency. In practical deployment, user histories and profile information should be managed under strict data protection principles, including data minimization, anonymization, and secure access control. Additionally, personalized systems may amplify demographic biases or create filter-bubble effects if not carefully monitored. Therefore, regular auditing of model outputs for bias and unintended behavioral patterns is necessary. Systems should also provide users with clear controls over the extent of personalization and the use of their data, ensuring user autonomy and supporting responsible deployment.
+\bibliographystyle{acl_natbib}
+\bibliography{custom}
+
+\end{document}
+
+\end{document}
